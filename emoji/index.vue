@@ -1,11 +1,13 @@
 <template>
   <el-popover
-    placement="bottom-start"
+    placement="top-start"
     class="ly-emoji"
     trigger="click"
     v-model="visible">
-    <div class="emoji-list">
+    <div class="emoji-list" v-loading="loading" element-loading-spinner="lyloading">
       <span class="item" v-for="(item,i) in 105" :key="item" :style="getPosition(i)" @click="setEmoji(i)"></span>
+      <!-- 预加载 -->
+      <img src="./emoji.png" @load="loading = false" v-show="false">
     </div>
     <slot slot="reference"></slot>
   </el-popover>
@@ -16,7 +18,8 @@ import data from './emojiList.js'
 export default {
   data () {
     return {
-      visible: false
+      visible: false,
+      loading: true
     }
   },
   methods: {
@@ -49,6 +52,7 @@ export default {
     margin: 0 1px;
     background-image: url(./emoji.png);
     cursor: pointer;
+    border-radius: 2px;
     &:hover{
       background-color: #eaeaea;
     }
