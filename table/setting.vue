@@ -3,7 +3,7 @@
  * @version:
  * @Author: lw
  * @Date: 2021-03-26 10:46:22
- * @LastEditTime: 2021-05-12 18:13:13
+ * @LastEditTime: 2021-12-06 17:46:59
 -->
 <template>
   <div class="xl-ly-setting">
@@ -12,9 +12,9 @@
     </div>
     <div class="handler-right">
       <slot name="handlerright"/>
-    </div>
-    <div class="sys-setting" v-if="setting">
-      <i class="el-icon-setting" @click="dialogVisible = true"></i>
+      <div class="sys-setting" v-if="setting">
+        <i class="el-icon-setting" @click="dialogVisible = true"></i>
+      </div>
     </div>
     <el-dialog
       title="设置显示字段"
@@ -50,8 +50,8 @@
         </div>
       </div>
       <span slot="footer" class="dialog-footer">
-        <el-button size="small" @click="dialogVisible = false">取消</el-button>
-        <el-button size="small"  type="primary" @click="hideChange">确定</el-button>
+        <el-button round size="small" @click="dialogVisible = false">取消</el-button>
+        <el-button round size="small"  type="primary" @click="hideChange">确定</el-button>
       </span>
     </el-dialog>
   </div>
@@ -141,19 +141,19 @@ export default {
 .xl-ly-setting{
   display: flex;
   align-items: center;
+  .handler-left, .handler-right{
+    margin: 20px 0;
+    &:empty{
+      margin: 0;
+    }
+  }
   .handler-right{
     margin-left: auto;
-  }
-  .handler-left, .handler-right,.sys-setting{
-    margin-bottom: 24px;
-    &:empty{
-      margin-bottom: 0;
-    }
   }
   .el-icon-setting{
     display: flex;
     font-size: 22px;
-    color: #8c8c8c;
+    color: #6E788A;
     cursor: pointer;
   }
 }
@@ -183,11 +183,6 @@ export default {
         right: 4px;
       }
     }
-  }
-}
-::v-deep{
-  .el-dialog__body{
-    margin-bottom: 0;
   }
 }
 </style>

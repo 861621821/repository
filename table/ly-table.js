@@ -3,28 +3,37 @@
  * @version: 1.0.0
  * @Author: lw
  * @Date: 2021-03-23 17:48:08
- * @LastEditTime: 2021-06-02 16:18:24
+ * @LastEditTime: 2022-02-25 10:42:56
  */
+import store from '@/store/store'
 export default {
+  provide () {
+    return {
+      flag: () => this.flag
+    }
+  },
   data () {
     return {
       IMMEDIATE: true,
       tableData: [],
       selected: [],
-      loading: false,
+      flag: false,
       page: 1,
       per_page: 10,
       total: 0,
-      listData: null,
+      listData: {},
       params: {},
       sort: {}
     }
   },
-  mounted () {},
+  mounted () { },
+  activated () {
+    this.$route.params.refresh && this.queryData()
+  },
   methods: {
     // 查询数据
     async queryData () {
-      this.loading = true
+      store.dispatch('ADDLOADING')
       // 获取自定义参数
       this.params = this.formatterParams
         ? this.formatterParams(this.params)
@@ -32,16 +41,19 @@ export default {
       const res = await this.COMM_HTTP.reqQuery({
         page: this.page,
         per_page: this.per_page,
-        ...this.sort,
-        ...this.params
+        ...this.params,
+        ...this.sort
       })
-      this.loading = false
-      if (res.code !== 0) {
-        this.tableData = res.list || res.data || res[this.DATA_LOCATION]
-        this.total = res.total
-        this.listData = res
-        return res
-      } else this.$message.error(res.msg)
+      store.dispatch('REMOVELOADING')
+      this.flag = true
+      if ((res && res.code) || (res && res.code === 0)) {
+        this.$message.error(res.msg)
+        return
+      }
+      this.tableData = res.list || res.data || res[this.DATA_LOCATION] || []
+      this.total = res.total
+      this.listData = res
+      return res
     },
     searchChange (params) {
       this.params = params
@@ -54,6 +66,7 @@ export default {
       this.per_page = size
       this.queryData()
     },
+    // 顺序变化回调
     handleSortChange ({ prop, order }) {
       if (order) {
         this.sort.order_by = prop
@@ -66,7 +79,6 @@ export default {
       this.queryData()
     },
     handleCurrentChange (page) {
-      console.log(page)
       this.page = page
       this.queryData()
     },
@@ -95,8 +107,11 @@ export default {
         [field]: row[field]
       }
       this.COMM_HTTP.reqDelete(params).then(res => {
-        if (res.code !== 0) this.$message.success('删除成功')
-        else this.$message.error(res.msg)
+        if ((res && res.code) || (res && res.code === 0)) {
+          this.$message.error(res.msg)
+          return
+        }
+        this.$message.success('删除成功')
         this.queryData()
       })
     },

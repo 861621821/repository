@@ -3,10 +3,10 @@
  * @version: 1.0.0
  * @Author: lw
  * @Date: 2021-03-16 19:06:43
- * @LastEditTime: 2021-07-02 15:01:03
+ * @LastEditTime: 2022-03-18 14:41:33
 -->
 <template>
-  <el-form ref="form" :model="form" inline size="medium">
+  <el-form ref="form" :model="form" inline class="xl-ly-search ly-shadow">
     <el-form-item
       :label="item.label + '：'"
       v-for="item in fields"
@@ -23,7 +23,9 @@
           v-model="form[item.key || item.prop]"
           v-if="item.type === 'select'"
           :clearable="item.clearable === 0 ? false : true"
-          :placeholder="item.placeholder || '请选择'"
+          :placeholder="item.placeholder || '请选择' + item.label"
+          :filterable="item.filterable"
+          :filter-method="item.filterMethod"
         >
           <el-option
             v-for="op in selectOption[item.prop]"
@@ -32,15 +34,21 @@
             :label="op[item.sourceField ? item.sourceField.label : 'label']"
           ></el-option>
         </el-select>
+        <!-- 标签 -->
+        <ly-tag-select
+          v-else-if="item.type === 'tag'"
+          v-model="form[item.key || item.prop]"
+        ></ly-tag-select>
         <!-- 日期选择器 -->
         <el-date-picker
           v-else-if="item.type === 'daterange'"
           v-model="temp[item.prop]"
           type="daterange"
-          range-separator="~"
+          range-separator="至"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
-          value-format="timestamp"
+          :default-time="['00:00:00', '23:59:59']"
+          :value-format="item.timeFormat || 'timestamp'"
           @change="handleDateChange(item)"
           :picker-options="item.pickerOptions || pickerOptions"
           v-bind="item.formItemProps"
@@ -51,10 +59,11 @@
           v-else-if="item.type === 'datetimerange'"
           v-model="temp[item.prop]"
           type="datetimerange"
-          range-separator="~"
+          range-separator="至"
           start-placeholder="开始日期"
           end-placeholder="结束日期"
-          value-format="timestamp"
+          :default-time="['00:00:00', '23:59:59']"
+          :value-format="item.timeFormat || 'timestamp'"
           @change="handleDateTimeChange(item)"
           :picker-options="pickerOptions"
           v-bind="item.formItemProps"
@@ -68,34 +77,50 @@
           v-bind="item.formItemProps"
         ></time-select-range>
         <!-- 员工选择器 -->
-        <emp-select
+        <ly-emp-select
+          :showLength="item.empShowLength || 1"
+          :checkList="form[item.key || item.prop]"
+          :modal="item.empModal"
           @getEmpId="(ids) => setEmpId(ids, item)"
-          :checkProp="form[item.key]"
           v-else-if="item.type === 'emp'"
-        ></emp-select>
+        ></ly-emp-select>
+        <!-- 云端账号选择器 -->
+        <ly-robot-select
+          :showLength="item.robotShowLength || 1"
+          :robotIds="form[item.key || item.prop]"
+          :modal="item.robotModal"
+          :setDisable="false"
+          @callback="(ids) => setRobotId(ids, item)"
+          v-else-if="item.type === 'robot'"
+        ></ly-robot-select>
         <!-- 输入框 -->
         <el-input
           v-model.trim="form[item.key || item.prop]"
           v-else
           clearable
-          :placeholder="item.placeholder || '请输入'"
+          :placeholder="item.placeholder || '请输入' + item.label"
+          maxlength="256"
         ></el-input>
       </template>
     </el-form-item>
     <el-form-item v-if="fields.length > 0 && hasSearch">
-      <el-button @click="fn_search">查询</el-button>
-    </el-form-item>
-    <el-form-item v-if="fields.length > 0 && hasSearch">
-      <el-button @click="fn_reset">重置</el-button>
+      <el-button
+        round
+        icon="iconfont icon-search"
+        type="primary"
+        @click="fn_search"
+        >查询</el-button
+      >
+      <el-button round icon="iconfont icon-data" @click="fn_reset"
+        >重置</el-button
+      >
     </el-form-item>
   </el-form>
 </template>
 <script>
 import { debounce } from 'throttle-debounce'
-import empSelect from '@/components/EmpSelectNew'
 import TimeSelectRange from '@/components/TimeSelectRange'
 export default {
-  // props: ['fields', 'slots', 'label-width'],
   props: {
     fields: {
       type: Array,
@@ -115,7 +140,6 @@ export default {
     }
   },
   components: {
-    empSelect,
     TimeSelectRange,
     formSlot: {
       render (h) {
@@ -145,13 +169,25 @@ export default {
     }
   },
   watch: {
-    form: {
+    // 动态添加下拉框选项时 需要重新赋值 不然不会显示动态添加的选项
+    fields: {
       handler (n, o) {
-        if (!this.hasSearch) {
-          this.debounceChange(n, o)
-        }
-      },
-      deep: true
+        n.map(e => {
+          if (e.type === 'select') {
+            if (e.source instanceof Array) {
+              this.selectOption[e.prop] = e.source
+            } else {
+              e.source().then((res) => {
+                if ((res && res.code) || (res && res.code === 0)) {
+                  this.$message.error(res.msg)
+                  return false
+                }
+                this.$set(this.selectOption, e.prop, res)
+              })
+            }
+          }
+        })
+      }
     }
   },
   mounted () {
@@ -162,6 +198,7 @@ export default {
   methods: {
     fn_search () {
       this.debounceChange(this.form)
+      this.$emit('search')
     },
     fn_reset () {
       for (const key in this.fields) {
@@ -171,9 +208,9 @@ export default {
             this.temp[this.fields[key].prop] = this.fields[key].default
             this.fields[key].key.map((e, i) => {
               if (i === 0) {
-                this.form[this.fields[key].key[i]] = parseInt(this.temp[this.fields[key].prop][0] / 1000)
+                this.form[this.fields[key].key[i]] = _type === 'timeintervalrange' ? this.temp[this.fields[key].prop][0] : parseInt(this.temp[this.fields[key].prop][0] / 1000)
               } else {
-                this.form[this.fields[key].key[i]] = parseInt(this.temp[this.fields[key].prop][1] / 1000)
+                this.form[this.fields[key].key[i]] = _type === 'timeintervalrange' ? this.temp[this.fields[key].prop][1] : parseInt(this.temp[this.fields[key].prop][1] / 1000)
               }
             })
           } else {
@@ -193,9 +230,6 @@ export default {
       this.debounceChange(this.form)
     },
     initFrom () {
-      if (!this.fields.length) {
-        this.$emit('change', {})
-      }
       this.fields.map(e => {
         if (e.key || e.prop) {
           if (e.key && e.key instanceof Array) {
@@ -216,7 +250,7 @@ export default {
                   this.$message.error(res.msg)
                   return false
                 }
-                this.selectOption[e.prop] = res
+                this.$set(this.selectOption, e.prop, res)
               })
             }
           }
@@ -233,6 +267,9 @@ export default {
     setEmpId (ids, item) {
       this.form[item.key || item.prop] = ids && ids.length > 0 ? ids.join(',') : null
     },
+    setRobotId (ids, item) {
+      this.form[item.key || item.prop] = ids
+    },
     handlerChange (newForm) {
       const params = {}
       for (const key in newForm) {
@@ -245,9 +282,17 @@ export default {
     handleDateChange (item) {
       item.key.map((e, i) => {
         if (i === 0) {
-          this.form[e] = this.temp[item.prop] ? this.temp[item.prop][i] / 1000 : ''
+          if (!item.timeFormat || item.timeFormat === 'timestamp') {
+            this.form[e] = this.temp[item.prop] ? this.temp[item.prop][i] / 1000 : ''
+          } else {
+            this.form[e] = this.temp[item.prop] ? this.temp[item.prop][i] : ''
+          }
         } else {
-          this.form[e] = this.temp[item.prop] ? this.temp[item.prop][i] / 1000 + 24 * 60 * 60 - 1 : ''
+          if (!item.timeFormat || item.timeFormat === 'timestamp') {
+            this.form[e] = this.temp[item.prop] ? this.temp[item.prop][i] / 1000 : ''
+          } else {
+            this.form[e] = this.temp[item.prop] ? this.temp[item.prop][i] : ''
+          }
         }
       })
     },
@@ -265,28 +310,36 @@ export default {
 }
 </script>
 <style lang="scss" scoped>
-::v-deep {
-  .el-form-item__label {
+.xl-ly-search {
+  background: #fff;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  padding: 20px 20px 4px 20px;
+  &:empty {
     padding: 0;
+    margin: 0;
   }
-  .el-form-item {
-    margin-bottom: 24px;
-    margin-right: 20px !important;
-  }
-  .el-input--medium .el-input__inner {
-    width: 224px;
-  }
-  .el-date-editor--daterange.el-input__inner {
-    width: 224px !important;
-  }
-  .el-date-editor--datetimerange.el-input__inner {
-    width: 300px;
-  }
-  .el-date-editor .el-range-separator {
-    padding: 0 2px;
-  }
-  .el-date-editor .el-range__close-icon {
-    width: 13px;
+  ::v-deep {
+    .el-form-item__label {
+      padding: 0;
+    }
+    .el-form-item {
+      margin-bottom: 16px;
+      margin-right: 20px !important;
+    }
+    .el-input--medium .el-input__inner {
+      width: 160px;
+    }
+    .el-date-editor--daterange.el-input__inner,
+    .el-date-editor--datetimerange.el-input__inner {
+      width: 240px;
+    }
+    .el-date-editor .el-range-separator {
+      padding: 0 2px;
+    }
+    .el-date-editor .el-range__close-icon {
+      width: 13px;
+    }
   }
 }
 </style>
